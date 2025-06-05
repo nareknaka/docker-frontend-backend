@@ -1,0 +1,32 @@
+name: Build and Scan Docker Images
+
+on:
+  push:
+    branches: [ngrigoryan/learning]
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build frontend Docker image
+      run: docker build -t frontend-image:latest ./frontend
+
+    - name: Scan frontend with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: frontend-image:latest
+
+    - name: Build backend Docker image
+      run: docker build -t backend-image:latest ./backend
+
+    - name: Scan backend with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: backend-image:latest
