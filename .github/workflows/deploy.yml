@@ -8,6 +8,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPO_FRONTEND: 650252169452.dkr.ecr.us-east-1.amazonaws.com/frontend
   ECR_REPO_BACKEND:  650252169452.dkr.ecr.us-east-1.amazonaws.com/backend
+  DOCKER_BUILDKIT: 1
 
 jobs:
   deploy:
@@ -27,27 +28,33 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v1
+    - name: Login to Amazon ECR (manual fix)
+      run: |
+        aws ecr get-login-password --region $AWS_REGION | \
+        docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
 
     - name: Build frontend Docker image
-      run: docker build -t $ECR_REPO_FRONTEND ./frontend
+      run: |
+        docker build -t $ECR_REPO_FRONTEND ./frontend
+        docker tag $ECR_REPO_FRONTEND $ECR_REPO_FRONTEND:latest
 
     - name: Scan frontend with Trivy
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.ECR_REPO_FRONTEND }}
+        image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
 
     - name: Push frontend to ECR
-      run: docker push $ECR_REPO_FRONTEND
+      run: docker push $ECR_REPO_FRONTEND:latest
 
     - name: Build backend Docker image
-      run: docker build -t $ECR_REPO_BACKEND ./backend
+      run: |
+        docker build -t $ECR_REPO_BACKEND ./backend
+        docker tag $ECR_REPO_BACKEND $ECR_REPO_BACKEND:latest
 
     - name: Scan backend with Trivy
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.ECR_REPO_BACKEND }}
+        image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
 
     - name: Push backend to ECR
-      run: docker push $ECR_REPO_BACKEND
+      run: docker push $ECR_REPO_BACKEND:latest
