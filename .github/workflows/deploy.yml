@@ -6,8 +6,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPO_FRONTEND: 650252169452.dkr.ecr.us-east-1.amazonaws.com/frontend
-  ECR_REPO_BACKEND:  650252169452.dkr.ecr.us-east-1.amazonaws.com/backend
+  ECR_REPO_FRONTEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/frontend
+  ECR_REPO_BACKEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
   DOCKER_BUILDKIT: 1
 
 jobs:
