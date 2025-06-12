@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ngrigoryan/learning 
 
 env:
   REGION: us-east-1
