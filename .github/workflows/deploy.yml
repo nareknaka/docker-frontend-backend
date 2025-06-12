@@ -81,20 +81,20 @@ jobs:
           terraform_version: 1.6.6
 
       - name: Terraform Init
-        working-directory: terraform
+        working-directory: infrastructure
         run: terraform init
 
       - name: Terraform Plan
-        working-directory: terraform
+        working-directory: infrastructure
         run: terraform plan
 
       - name: Terraform Apply
-        working-directory: terraform
+        working-directory: infrastructure
         run: terraform apply -auto-approve
 
       - name: Output EC2 IP
         id: output_ip
-        working-directory: terraform
+        working-directory: infrastructure
         shell: bash
         run: |
           IP=$(terraform output -raw ec2_ip 2>/dev/null)
@@ -119,4 +119,4 @@ jobs:
         run: |
           echo "[web]" > ansible/inventory.ini
           echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=ansible/ec2-pair.pem" >> ansible/inventory.ini
-          ansible-playbook -i ansible/inventory.ini ansible/webapp-config.yml
+          ansible-playbook -i ansible/inventory.ini infrastructure/setup-docker.yml
