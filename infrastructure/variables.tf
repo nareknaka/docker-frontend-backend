@@ -9,5 +9,5 @@ variable "key_name" {
 
 variable "private_key_path" {
   description = "Path to your private key file"
-  default     = "devops-key.pem"
+  default     = "infrastructure/devops-key.pem"
 }
