@@ -61,12 +61,20 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo apt update && sudo apt install -y git docker-compose curl
+            sudo apt update && sudo apt install -y git curl
+
+            # install docker-compose manually
+            sudo curl -L "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+
             git clone https://github.com/nareknaka/docker-frontend-backend.git || true
             cd docker-frontend-backend
+
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+
             docker pull $ECR_REPO_FRONTEND:latest
             docker pull $ECR_REPO_BACKEND:latest
+
             docker-compose down || true
             docker-compose up -d
