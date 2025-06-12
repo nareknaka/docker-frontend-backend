@@ -11,3 +11,8 @@ variable "private_key_path" {
   description = "Path to your private key file"
   default     = "devops-key.pem"
 }
+
+variable "private_key_content" {
+  description = "SSH private key content"
+  type        = string
+}
