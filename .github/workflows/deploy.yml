@@ -10,6 +10,7 @@ env:
   AWS_REGION: us-east-1
   ECR_FRONTEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/frontend
   ECR_BACKEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/backend
+  TF_VAR_private_key_content: ${{ secrets.EC2_SSH_KEY }}
 
 jobs:
   build-and-push:
@@ -25,8 +26,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_FRONTEND
 
       - name: Build frontend Docker image
         run: docker build -t $ECR_FRONTEND ./frontend
