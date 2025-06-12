@@ -1,68 +1,122 @@
-name: Deploy Docker Web App to EC2
+name: Build & Deploy to EC2 with Docker & Ansible
 
 on:
   push:
     branches:
       - main
-      - ngrigoryan/learning 
+      - ngrigoryan/learning
 
 env:
-  REGION: us-east-1
-  ECR_REPO_FRONTEND: 123456789012.dkr.ecr.us-east-1.amazonaws.com/frontend
-  ECR_REPO_BACKEND: 123456789012.dkr.ecr.us-east-1.amazonaws.com/backend
+  AWS_REGION: us-east-1
+  ECR_FRONTEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/frontend
+  ECR_BACKEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/backend
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Build frontend image
-        run: docker build -t $ECR_REPO_FRONTEND:latest ./frontend
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build backend image
-        run: docker build -t $ECR_REPO_BACKEND:latest ./backend
+      - name: Build frontend Docker image
+        run: docker build -t $ECR_FRONTEND ./frontend
 
-      - name: ECR login for frontend
+      - name: Build backend Docker image
+        run: docker build -t $ECR_BACKEND ./backend
+
+      - name: Trivy scan - Frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_FRONTEND }}
+          format: 'table'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Trivy scan - Backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_BACKEND }}
+          format: 'table'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Tag & push frontend
         run: |
-          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+          docker tag $ECR_FRONTEND $ECR_FRONTEND:latest
+          docker push $ECR_FRONTEND:latest
 
-      - name: Push frontend image
-        run: docker push $ECR_REPO_FRONTEND:latest
-
-      - name: ECR login for backend
+      - name: Tag & push backend
         run: |
-          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+          docker tag $ECR_BACKEND $ECR_BACKEND:latest
+          docker push $ECR_BACKEND:latest
 
-      - name: Push backend image
-        run: docker push $ECR_REPO_BACKEND:latest
+  provision-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Save SSH Key to file
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve
+
+      - name: Output EC2 IP
+        id: output_ip
+        working-directory: terraform
+        shell: bash
         run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
-          chmod 400 key.pem
+          IP=$(terraform output -raw ec2_ip 2>/dev/null)
+          echo "ec2_ip=$IP" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to EC2 via SSH and Docker Compose
+  configure-server:
+    needs: provision-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create ansible private key
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            sudo apt update && sudo apt install -y git curl
-            curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            chmod +x /usr/local/bin/docker-compose
-            git clone https://github.com/nareknaka/docker-frontend-backend.git || true
-            cd docker-frontend-backend
-            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
-            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
-            docker pull $ECR_REPO_FRONTEND:latest
-            docker pull $ECR_REPO_BACKEND:latest
-            docker-compose down || true
-            docker-compose up -d
-          EOF
+          mkdir -p ansible
+          echo "${{ secrets.EC2_SSH_KEY }}" > ansible/ec2-pair.pem
+          chmod 600 ansible/ec2-pair.pem
+
+      - name: Run Ansible playbook
+        env:
+          EC2_IP: ${{ needs.provision-infrastructure.outputs.ec2_ip }}
+        run: |
+          echo "[web]" > ansible/inventory.ini
+          echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=ansible/ec2-pair.pem" >> ansible/inventory.ini
+          ansible-playbook -i ansible/inventory.ini ansible/webapp-config.yml
