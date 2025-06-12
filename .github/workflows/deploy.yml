@@ -1,6 +1,4 @@
-from pathlib import Path
-
-yaml_content = """name: Build & Deploy to EC2 with Docker & Ansible
+name: Build & Deploy to EC2 with Docker & Ansible
 
 on:
   push:
@@ -122,8 +120,16 @@ jobs:
           echo "[web]" > ansible/inventory.ini
           echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=ansible/ec2-pair.pem" >> ansible/inventory.ini
           ansible-playbook -i ansible/inventory.ini infrastructure/setup-docker.yml
-"""
 
-file_path = Path("/mnt/data/github-pipeline.yml")
-file_path.write_text(yaml_content)
-file_path.name
+      - name: Deploy to EC2 via SSH and Docker Compose
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd docker-frontend-backend
+            git pull origin main
+            docker-compose pull
+            docker-compose down
+            docker-compose up -d
