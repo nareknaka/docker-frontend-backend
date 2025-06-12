@@ -1,0 +1,28 @@
+---
+- name: Setup Docker and Docker Compose on EC2
+  hosts: web
+  become: yes
+
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Add ubuntu to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Install Docker Compose
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+
+    - name: Verify Docker version
+      command: docker --version
+
+    - name: Verify Docker Compose version
+      command: docker-compose --version
