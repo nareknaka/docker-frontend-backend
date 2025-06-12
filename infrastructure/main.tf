@@ -19,7 +19,7 @@ resource "aws_instance" "webapp" {
 
   connection {
     type        = "ssh"
-    user        = "ec2-user"
+    user        = "ubuntu"
     private_key = file("${path.module}/devops-key.pem")
     host        = self.public_ip
   }
