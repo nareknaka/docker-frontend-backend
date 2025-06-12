@@ -1,13 +1,15 @@
-name: Build, Scan, Push to ECR and Deploy to EC2
+name: Deploy Docker App to EC2
 
 on:
   push:
-    branches: [main, ngrigoryan/learning]
+    branches:
+      - main
+      - ngrigoryan/learning
 
 env:
   AWS_REGION: us-east-1
   ECR_REPO_FRONTEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/frontend
-  ECR_REPO_BACKEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
+  ECR_REPO_BACKEND:  650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
   DOCKER_BUILDKIT: 1
 
 jobs:
@@ -15,67 +17,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v3
+    - name: Checkout source
+      uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        run: |
+    - name: Log in to ECR
+      run: |
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+
+    - name: Build frontend Docker image
+      run: docker build -t $ECR_REPO_FRONTEND:latest ./frontend
+
+    - name: Scan frontend with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
+
+    - name: Push frontend to ECR
+      run: docker push $ECR_REPO_FRONTEND:latest
+
+    - name: Build backend Docker image
+      run: docker build -t $ECR_REPO_BACKEND:latest ./backend
+
+    - name: Scan backend with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
+
+    - name: Push backend to ECR
+      run: docker push $ECR_REPO_BACKEND:latest
+
+    - name: Deploy to EC2 via SSH and Docker Compose
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/app
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
-
-      - name: Build frontend Docker image
-        run: docker build -t $ECR_REPO_FRONTEND:latest ./frontend
-
-      - name: Scan frontend with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
-          format: table
-          exit-code: 0
-
-      - name: Push frontend to ECR
-        run: docker push $ECR_REPO_FRONTEND:latest
-
-      - name: Build backend Docker image
-        run: docker build -t $ECR_REPO_BACKEND:latest ./backend
-
-      - name: Scan backend with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
-          format: table
-          exit-code: 0
-
-      - name: Push backend to ECR
-        run: docker push $ECR_REPO_BACKEND:latest
-
-      - name: Save SSH private key to file
-        run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
-          chmod 600 key.pem
-
-      - name: Deploy to EC2 via SSH and Docker Compose
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key_path: ./key.pem
-          port: 22
-          script: |
-            cd /home/ubuntu/app
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
-            docker pull $ECR_REPO_FRONTEND:latest
-            docker pull $ECR_REPO_BACKEND:latest
-            docker-compose down
-            docker-compose up -d
+          docker pull $ECR_REPO_FRONTEND:latest
+          docker pull $ECR_REPO_BACKEND:latest
+          docker-compose down
+          docker-compose up -d
