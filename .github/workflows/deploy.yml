@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - ngrigoryan/learning
+
 env:
   REGION: us-east-1
   ECR_REPO_FRONTEND: 123456789012.dkr.ecr.us-east-1.amazonaws.com/frontend
@@ -31,27 +31,37 @@ jobs:
       - name: Build backend image
         run: docker build -t $ECR_REPO_BACKEND:latest ./backend
 
-      - name: ECR login (frontend)
-        run: aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+      - name: ECR login for frontend
+        run: |
+          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
 
       - name: Push frontend image
         run: docker push $ECR_REPO_FRONTEND:latest
 
-      - name: ECR login (backend)
-        run: aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+      - name: ECR login for backend
+        run: |
+          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
 
       - name: Push backend image
         run: docker push $ECR_REPO_BACKEND:latest
 
+      - name: Save SSH Key to file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 400 key.pem
+
       - name: Deploy to EC2 via SSH and Docker Compose
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            sudo apt update && sudo apt install -y git curl
+            curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            git clone https://github.com/nareknaka/docker-frontend-backend.git || true
             cd docker-frontend-backend
-            git pull origin main
-            docker-compose pull
-            docker-compose down
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+            docker pull $ECR_REPO_FRONTEND:latest
+            docker pull $ECR_REPO_BACKEND:latest
+            docker-compose down || true
             docker-compose up -d
+          EOF
