@@ -2,7 +2,7 @@ name: Build, Scan, Push to ECR and Deploy to EC2
 
 on:
   push:
-    branches: [main,ngrigoryan/learning]
+    branches: [main, ngrigoryan/learning]
 
 env:
   AWS_REGION: us-east-1
@@ -15,63 +15,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v3
+      - name: Checkout source
+        uses: actions/checkout@v3
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR (manual fix)
-      run: |
-        aws ecr get-login-password --region $AWS_REGION | \
-        docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
-        aws ecr get-login-password --region $AWS_REGION | \
-        docker login --username AWS --password-stdin $ECR_REPO_BACKEND
-
-    - name: Build frontend Docker image
-      run: |
-        docker build -t $ECR_REPO_FRONTEND ./frontend
-        docker tag $ECR_REPO_FRONTEND $ECR_REPO_FRONTEND:latest
-
-    - name: Scan frontend with Trivy
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
-
-    - name: Push frontend to ECR
-      run: docker push $ECR_REPO_FRONTEND:latest
-
-    - name: Build backend Docker image
-      run: |
-        docker build -t $ECR_REPO_BACKEND ./backend
-        docker tag $ECR_REPO_BACKEND $ECR_REPO_BACKEND:latest
-
-    - name: Scan backend with Trivy
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
-
-    - name: Push backend to ECR
-      run: docker push $ECR_REPO_BACKEND:latest
-
-    - name: Deploy to EC2 via SSH and Docker Compose
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          cd /home/ec2-user/app
+      - name: Login to Amazon ECR
+        run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
-          docker pull $ECR_REPO_FRONTEND:latest
-          docker pull $ECR_REPO_BACKEND:latest
-          docker-compose down
-          docker-compose up -d
+
+      - name: Build frontend Docker image
+        run: docker build -t $ECR_REPO_FRONTEND:latest ./frontend
+
+      - name: Scan frontend with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
+          format: table
+          exit-code: 0
+
+      - name: Push frontend to ECR
+        run: docker push $ECR_REPO_FRONTEND:latest
+
+      - name: Build backend Docker image
+        run: docker build -t $ECR_REPO_BACKEND:latest ./backend
+
+      - name: Scan backend with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
+          format: table
+          exit-code: 0
+
+      - name: Push backend to ECR
+        run: docker push $ECR_REPO_BACKEND:latest
+
+      - name: Deploy to EC2 via SSH and Docker Compose
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/ubuntu/app
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
+            docker pull $ECR_REPO_FRONTEND:latest
+            docker pull $ECR_REPO_BACKEND:latest
+            docker-compose down
+            docker-compose up -d
