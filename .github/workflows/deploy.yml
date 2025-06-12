@@ -1,5 +1,3 @@
-# GitHub Workflow - YAML GitHub Workflow (github-workflow.json)
-
 name: Deploy Docker App to EC2
 
 on:
