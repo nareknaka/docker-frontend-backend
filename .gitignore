@@ -7,3 +7,8 @@ npm-debug.log
 *.sublime-workspace
 .vs
 *.pem
+# Terraform state
+*.tfstate
+*.tfstate.*
+.terraform/
+*.lock.hcl
