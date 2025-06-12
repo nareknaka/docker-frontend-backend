@@ -9,13 +9,12 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPO_FRONTEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/frontend
-  ECR_REPO_BACKEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
+  ECR_REPO_BACKEND:  650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
   DOCKER_BUILDKIT: 1
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -26,9 +25,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region:            ${{ env.AWS_REGION }}
 
       - name: Build frontend Docker image
         run: docker build -t $ECR_REPO_FRONTEND:latest ./frontend
@@ -60,7 +59,7 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key_path: key.pem
+          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
