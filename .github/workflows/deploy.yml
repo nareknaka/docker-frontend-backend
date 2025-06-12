@@ -59,12 +59,17 @@ jobs:
       - name: Push backend to ECR
         run: docker push $ECR_REPO_BACKEND:latest
 
+      - name: Save SSH private key to file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
       - name: Deploy to EC2 via SSH and Docker Compose
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key_path: ./key.pem
           port: 22
           script: |
             cd /home/ubuntu/app
