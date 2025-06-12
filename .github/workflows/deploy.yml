@@ -1,3 +1,5 @@
+# GitHub Workflow - YAML GitHub Workflow (github-workflow.json)
+
 name: Deploy Docker App to EC2
 
 on:
@@ -15,7 +17,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -36,20 +37,22 @@ jobs:
       - name: Build backend Docker image
         run: docker build -t $ECR_REPO_BACKEND:latest ./backend
 
-      - name: Login to ECR
+      - name: Login to frontend ECR
         run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+
+      - name: Push frontend to ECR
+        run: docker push $ECR_REPO_FRONTEND:latest
+
+      - name: Login to backend ECR
+        run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_BACKEND
 
-      - name: Push Docker images to ECR
-        run: |
-          docker push $ECR_REPO_FRONTEND:latest
-          docker push $ECR_REPO_BACKEND:latest
+      - name: Push backend to ECR
+        run: docker push $ECR_REPO_BACKEND:latest
 
       - name: Save SSH Key to file
-        run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
-          chmod 600 key.pem
+        run: echo "${{ secrets.EC2_SSH_KEY }}" > key.pem && chmod 600 key.pem
 
       - name: Deploy to EC2 via SSH and Docker Compose
         uses: appleboy/ssh-action@v1.0.0
