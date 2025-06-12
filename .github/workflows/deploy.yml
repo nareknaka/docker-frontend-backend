@@ -2,7 +2,7 @@ name: Build, Scan, and Push to ECR
 
 on:
   push:
-    branches: [main]
+    branches: [feature/ec2-infra-deploy]
 
 env:
   AWS_REGION: us-east-1
