@@ -1,13 +1,11 @@
-variable "region" {
-  default = "us-east-1"
-}
-
 variable "key_name" {
-  description = "Name of the AWS EC2 key pair"
-  default     =  var.public_key_content 
+  description = "Name of the key pair"
 }
 
-variable "private_key_path" {
-  description = "Path to your private key file"
-  default     = var.private_key_content 
+variable "public_key_content" {
+  description = "Public key content from GitHub secret"
+}
+
+variable "private_key_content" {
+  description = "Private key content from GitHub secret"
 }
