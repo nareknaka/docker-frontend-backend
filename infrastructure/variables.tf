@@ -4,10 +4,10 @@ variable "region" {
 
 variable "key_name" {
   description = "Name of the AWS EC2 key pair"
-  default     = "devops-key"
+  default     =  var.public_key_content 
 }
 
 variable "private_key_path" {
   description = "Path to your private key file"
-  default     = "devops-key.pem"
+  default     = var.private_key_content 
 }
