@@ -14,3 +14,11 @@ variable "PUBLIC_KEY_CONTENT" {
 variable "PRIVATE_KEY_CONTENT" {
   description = "Private key content from GitHub secret"
 }
+
+variable "AWS_ACCESS_KEY_ID" {
+  description = "AWS Access Key ID from GitHub secret"
+}
+
+variable "AWS_SECRET_ACCESS_KEY" {
+  description = "AWS Secret Access Key from GitHub secret"
+}
