@@ -60,6 +60,9 @@ jobs:
 
   provision-infrastructure:
     runs-on: ubuntu-latest
+    env:  # ✅ ՊԵՏՔԻ ՏԵՂԸ՝ ամբողջ job-ի համար
+      TF_VAR_private_key_content: ${{ secrets.EC2_SSH_KEY }}
+      TF_VAR_key_name: "devops_key"
     outputs:
       ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
 
@@ -99,6 +102,11 @@ jobs:
           mkdir -p ansible
           echo "${{ secrets.EC2_SSH_KEY }}" > ansible/ec2-key.pem
           chmod 600 ansible/ec2-key.pem
+
+      - name: Export AWS credentials for ECR login
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
 
       - name: Run Ansible Playbook
         env:
