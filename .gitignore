@@ -9,3 +9,4 @@ npm-debug.log
 .terraform/
 *.pem
 *.pubinfrastructure/devops-key
+*.pubinfrastructure/devops_key_rotatedinfrastructure/devops-key
