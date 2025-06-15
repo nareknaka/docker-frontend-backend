@@ -4,7 +4,7 @@ provider "aws" {
   secret_key = var.AWS_SECRET_ACCESS_KEY
 }
 
-resource "aws_key_pair" "devops_key" {
+resource "aws_key_pair" "devops-key-rotated" {
   key_name   = var.KEY_NAME
   public_key = var.PUBLIC_KEY_CONTENT
 }
