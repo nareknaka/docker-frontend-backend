@@ -60,9 +60,6 @@ jobs:
 
   provision-infrastructure:
     runs-on: ubuntu-latest
-    env:  # ✅ ՊԵՏՔԻ ՏԵՂԸ՝ ամբողջ job-ի համար
-      TF_VAR_private_key_content: ${{ secrets.EC2_SSH_KEY }}
-      TF_VAR_key_name: "devops_key"
     outputs:
       ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
 
