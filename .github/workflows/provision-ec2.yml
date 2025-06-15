@@ -1,7 +1,9 @@
-name: Provision EC2 with Terraform
+name: Build, Deploy to EC2 via Terraform & Ansible
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feature/ec2-infra-deploy
 
 env:
   AWS_REGION: us-east-1
@@ -9,7 +11,6 @@ env:
 jobs:
   provision:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -38,4 +39,5 @@ jobs:
         working-directory: infrastructure
         env:
           TF_VAR_private_key_content: ${{ secrets.EC2_SSH_KEY }}
+          TF_VAR_key_name: "devops_key" 
         run: terraform apply -auto-approve
