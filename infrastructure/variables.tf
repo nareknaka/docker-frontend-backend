@@ -4,11 +4,11 @@ variable "region" {
 }
 
 variable "KEY_NAME" {
-  description = "Name of the key pair"
+  description = "SSH key name"
 }
 
 variable "PUBLIC_KEY_CONTENT" {
-  description = "Public key content from GitHub secret"
+  description = "SSH public key content"
 }
 
 variable "PRIVATE_KEY_CONTENT" {
