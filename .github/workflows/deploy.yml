@@ -84,6 +84,9 @@ jobs:
 
       - name: Terraform Apply
         working-directory: infrastructure
+        env:
+          public_key_content: ${{ secrets.PUBLIC_KEY_CONTENT }}
+          private_key_content: ${{ secrets.PRIVATE_KEY_CONTENT }}
         run: terraform apply -auto-approve
 
       - name: Output EC2 IP
