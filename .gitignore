@@ -10,3 +10,5 @@ npm-debug.log
 *.pem
 *.pubinfrastructure/devops-key
 *.pubinfrastructure/devops_key_rotatedinfrastructure/devops-key
+infrastructure/devops-key
+infrastructure/devops-key-rotated.pub
