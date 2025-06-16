@@ -5,7 +5,7 @@ provider "aws" {
 }
 
 resource "aws_key_pair" "devops-key-rotated" {
-  KEY_NAME = var.KEY_NAME
+  key_name = var.KEY_NAME
   PUBLIC_KEY = var.PUBLIC_KEY_CONTENT
 }
 
