@@ -4,7 +4,7 @@ provider "aws" {
   secret_key = var.AWS_SECRET_ACCESS_KEY
 }
 
-resource "aws_key_pair" "devops-key-rotated" {
+resource "aws_key_pair" "devops-key" {
   key_name = var.KEY_NAME
   public_key = file("${path.module}/devops-key.pub")
 }
