@@ -21,7 +21,134 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
+      - name: Configure AWS credentianame: Build, Deploy to EC2 via Terraform & Ansible
+
+on:
+  push:
+    branches:
+      - feature/ec2-infra-deploy
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO_FRONTEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/frontend
+  ECR_REPO_BACKEND: 650251694526.dkr.ecr.us-east-1.amazonaws.com/webapp/backend
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
+
+      - name: Build frontend Docker image
+        run: |
+          docker build -t $ECR_REPO_FRONTEND ./frontend
+          docker tag $ECR_REPO_FRONTEND $ECR_REPO_FRONTEND:latest
+
+      - name: Scan frontend with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
+
+      - name: Push frontend to ECR
+        run: docker push $ECR_REPO_FRONTEND:latest
+
+      - name: Build backend Docker image
+        run: |
+          docker build -t $ECR_REPO_BACKEND ./backend
+          docker tag $ECR_REPO_BACKEND $ECR_REPO_BACKEND:latest
+
+      - name: Scan backend with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
+
+      - name: Push backend to ECR
+        run: docker push $ECR_REPO_BACKEND:latest
+
+  provision-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
+    env:
+      TF_VAR_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      TF_VAR_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TF_VAR_KEY_NAME: ${{ secrets.KEY_NAME }}
+      TF_VAR_PUBLIC_KEY_CONTENT: ${{ secrets.PUBLIC_KEY_CONTENT }}
+      TF_VAR_PRIVATE_KEY_CONTENT: ${{ secrets.PRIVATE_KEY_CONTENT }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        working-directory: infrastructure
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infrastructure
+        env:
+          TF_VAR_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_KEY_NAME: ${{ secrets.KEY_NAME }}
+          TF_VAR_PUBLIC_KEY_CONTENT: ${{ secrets.PUBLIC_KEY_CONTENT }}
+          TF_VAR_PRIVATE_KEY_CONTENT: ${{ secrets.PRIVATE_KEY_CONTENT }}
+
+        run: terraform apply -auto-approve
+
+      - name: Output EC2 IP
+        id: output_ip
+        working-directory: infrastructure
+        run: |
+          IP=$(terraform output -raw ec2_ip)
+          echo "ec2_ip=$IP" >> "$GITHUB_OUTPUT"
+
+  configure-server:
+    needs: provision-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create SSH private key for Ansible
+        run: |
+          mkdir -p ansible
+          echo "${{ secrets.EC2_SSH_KEY }}" > ansible/ec2-key.pem
+          chmod 600 ansible/ec2-key.pem
+
+      - name: Export AWS credentials for ECR login
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "KEY_NAME=devops-key-rotated" >> $GITHUB_ENV
+
+      - name: Run Ansible Playbook
+        env:
+          EC2_IP: ${{ needs.provision-infrastructure.outputs.ec2_ip }}
+        run: |
+          echo "[web]" > ansible/inventory.ini
+          echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=ansible/ec2-key.pem" >> ansible/inventory.ini
+          ansible-playbook -i ansible/inventory.ini infrastructure/setup-docker.ymlls
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
