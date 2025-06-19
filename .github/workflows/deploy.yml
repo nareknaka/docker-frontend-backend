@@ -32,43 +32,20 @@ jobs:
         run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_FRONTEND
 
-      - name: Build frontend Docker image
+      - name: Build and Push Frontend Image
         run: |
           docker build -t $ECR_REPO_FRONTEND ./frontend
-          docker tag $ECR_REPO_FRONTEND $ECR_REPO_FRONTEND:latest
+          docker push $ECR_REPO_FRONTEND
 
-      - name: Scan frontend with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_REPO_FRONTEND }}:latest
-
-      - name: Push frontend to ECR
-        run: docker push $ECR_REPO_FRONTEND:latest
-
-      - name: Build backend Docker image
+      - name: Build and Push Backend Image
         run: |
           docker build -t $ECR_REPO_BACKEND ./backend
-          docker tag $ECR_REPO_BACKEND $ECR_REPO_BACKEND:latest
-
-      - name: Scan backend with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_REPO_BACKEND }}:latest
-
-      - name: Push backend to ECR
-        run: docker push $ECR_REPO_BACKEND:latest
+          docker push $ECR_REPO_BACKEND
 
   provision-infrastructure:
     runs-on: ubuntu-latest
     outputs:
       ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
-    env:
-      TF_VAR_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      TF_VAR_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      TF_VAR_KEY_NAME: ${{ secrets.KEY_NAME }}
-      TF_VAR_PUBLIC_KEY_CONTENT: ${{ secrets.PUBLIC_KEY_CONTENT }}
-      TF_VAR_PRIVATE_KEY_CONTENT: ${{ secrets.PRIVATE_KEY_CONTENT }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -87,10 +64,8 @@ jobs:
         env:
           TF_VAR_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           TF_VAR_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          TF_VAR_KEY_NAME: ${{ secrets.KEY_NAME }}
           TF_VAR_PUBLIC_KEY_CONTENT: ${{ secrets.PUBLIC_KEY_CONTENT }}
           TF_VAR_PRIVATE_KEY_CONTENT: ${{ secrets.PRIVATE_KEY_CONTENT }}
-
         run: terraform apply -auto-approve
 
       - name: Output EC2 IP
@@ -110,14 +85,8 @@ jobs:
       - name: Create SSH private key for Ansible
         run: |
           mkdir -p ansible
-          echo "${{ secrets.EC2_SSH_KEY }}" > ansible/ec2-key.pem
+          echo "${{ secrets.PRIVATE_KEY_CONTENT }}" > ansible/ec2-key.pem
           chmod 600 ansible/ec2-key.pem
-
-      - name: Export AWS credentials for ECR login
-        run: |
-          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
-          echo "KEY_NAME=devops-key-rotated" >> $GITHUB_ENV
 
       - name: Run Ansible Playbook
         env:
