@@ -15,3 +15,6 @@ infrastructure/devops-key-rotated.pub
 infrastructure/devops-key-rotated
 infrastructure/devops-key-rotated.pub
 infrastructure/*.pem
+infrastructure/devops-key
+infrastructure/devops-key.pub
+
