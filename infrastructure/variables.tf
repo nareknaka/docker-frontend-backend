@@ -11,7 +11,6 @@ variable "PUBLIC_KEY_CONTENT" {
   description = "SSH public key content from GitHub secret"
 }
 
-
 variable "PRIVATE_KEY_CONTENT" {
   description = "Private key content from GitHub secret"
 }
