@@ -7,6 +7,9 @@ variable "KEY_NAME" {
   description = "SSH key name"
 }
 
+variable "PUBLIC_KEY_CONTENT" {
+  description = "SSH public key content from GitHub secret"
+}
 
 
 variable "PRIVATE_KEY_CONTENT" {
