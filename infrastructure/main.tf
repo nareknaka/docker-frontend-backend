@@ -6,7 +6,7 @@ provider "aws" {
 
 resource "aws_key_pair" "devops-key-rotated" {
   key_name = var.KEY_NAME
-  public_key = var.PUBLIC_KEY_CONTENT
+  public_key = file("${path.module}/devops-key.pub")
 }
 
 resource "aws_instance" "webapp" {
