@@ -1,0 +1,44 @@
+---
+- name: Setup Docker and Docker Compose on EC2
+  hosts: web
+  become: yes
+  tasks:
+    - name: Install required packages
+      apt:
+        name: [ "apt-transport-https", "ca-certificates", "curl", "software-properties-common" ]
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Install Docker Engine
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Install Docker Compose
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+          -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+
+    - name: Check Docker version
+      command: docker --version
+
+    - name: Check Docker Compose version
+      command: docker-compose --version
