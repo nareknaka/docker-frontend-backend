@@ -1,0 +1,8 @@
+name: CI Build and push Image 
+
+on:
+    push:
+        branches: [feauture/ec2-infra-deploy, main]
+    pull_request:
+        branches: [main]
+        
