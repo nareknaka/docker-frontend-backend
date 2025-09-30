@@ -3,8 +3,8 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "KEY_NAME" {
-  description = "SSH key name"
+variable "AWS_KEY_PAIR_NAME" {
+  description = "SSH key pair name for EC2 access"
 }
 
 variable "AWS_ACCESS_KEY_ID" {
