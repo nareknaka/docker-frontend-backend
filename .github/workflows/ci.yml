@@ -29,3 +29,8 @@ jobs:
         MY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
         echo "My account is: $MY_ACCOUNT"
         echo "MY_ACCOUNT=$MY_ACCOUNT" >> $GITHUB_ENV
+    
+    - name: create image storage 
+      run: |
+        aws ecr create-repository --repository-name my-frontend || echo "Already exist"
+        aws ecr create-repository --repository-name mmy-backend || echo "Already exist"
