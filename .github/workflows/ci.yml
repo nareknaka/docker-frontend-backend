@@ -29,3 +29,15 @@ jobs:
         MY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
         echo "My account is: $MY_ACCOUNT"
         echo "MY_ACCOUNT=$MY_ACCOUNT" >> $GITHUB_ENV
+    
+    - name: create image storage 
+      run: |
+        echo "creating ECR repositories ... "
+        aws ecr create-repository --repository-name my-frontend 2>/dev/null && echo "frontend repo created" || echo "frontend repo exist"
+        aws ecr create-repository --repository-name my-backend 2>/dev/null && echo "backend repo created"|| echo "backend repo exist"
+
+    - name: login to ECR
+      run: |
+        echo "Logging into ECR ..."
+        aws ecr get-login-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
+        echo "ECR Login successful"     
