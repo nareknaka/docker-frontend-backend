@@ -39,5 +39,5 @@ jobs:
     - name: login to ECR
       run: |
         echo "Logging into ECR ..."
-        aws ecr get-login-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east1.amazonaws.com 
+        aws ecr get-login-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
         echo "ECR Login successful"     
