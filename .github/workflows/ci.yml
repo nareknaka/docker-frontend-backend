@@ -35,3 +35,9 @@ jobs:
         echo "creating ECR repositories ... "
         aws ecr create-repository --repository-name my-frontend 2>/dev/null && echo "frontend repo created" || echo "frontend repo exist"
         aws ecr create-repository --repository-name my-backend 2>/dev/null && echo "backend repo created"|| echo "backend repo exist"
+
+    - name: login to ECR
+      run: |
+        echo "Logging into ECR ..."
+        aws ecr get-lgin-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east1.amazonaws.com 
+        echo "ECR Login successful"     
