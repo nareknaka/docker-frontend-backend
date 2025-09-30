@@ -32,5 +32,6 @@ jobs:
     
     - name: create image storage 
       run: |
-        aws ecr create-repository --repository-name my-frontend || echo "Already exist"
-        aws ecr create-repository --repository-name my-backend || echo "Already exist"
+        echo "creating ECR repositories ... "
+        aws ecr create-repository --repository-name my-frontend 2>/dev/null && echo "frontend repo created" || echo "frontend repo exist"
+        aws ecr create-repository --repository-name my-backend 2>/dev/null && echo "backend repo created"|| echo "backend repo exist"
