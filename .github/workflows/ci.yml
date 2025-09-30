@@ -41,3 +41,17 @@ jobs:
         echo "Logging into ECR ..."
         aws ecr get-login-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
         echo "ECR Login successful"     
+
+    - name: Build and push frontend image
+      run: |
+        echo "Building frontend Docker image..."
+        docker build -t $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest ./frontend
+        docker push $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
+        echo " Frontend image pushed to ECR"
+
+    - name: Build and push backend image
+      run: |
+        echo "Building backend Docker image..."
+        docker build -t $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest ./backend
+        docker push $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
+        echo " Backend image pushed to ECR"
