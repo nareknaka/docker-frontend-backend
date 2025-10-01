@@ -10,3 +10,11 @@ on:
 env:
   AWS_REGION: us-east-1 
 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+    - name: Chechout
+      uses: actions/checkout@v4
