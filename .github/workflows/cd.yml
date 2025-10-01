@@ -55,3 +55,67 @@ jobs:
         ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts
 
 
+    - name: Deploy App to EC2
+      run: |
+        # Create deploy script
+        cat > deploy.sh << 'EOF'
+        # Install Docker if needed
+        if ! command -v docker &> /dev/null; then
+          sudo apt update
+          sudo apt install -y docker.io docker-compose awscli
+          sudo systemctl start docker
+          sudo usermod -aG docker ubuntu
+        fi
+        
+        # Login to ECR
+        aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin $1.dkr.ecr.us-east-1.amazonaws.com
+        
+        # Stop old containers
+        sudo docker-compose down 2>/dev/null || true
+        
+        # Create docker-compose
+        cat > docker-compose.yml << COMPOSE_EOF
+        version: '3.8'
+        services:
+          backend:
+            image: $1.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
+            ports:
+              - "5000:5000"
+            environment:
+              - MONGODB_URI=mongodb://mongodb:27017/todoapp
+            depends_on:
+              - mongodb
+
+          frontend:
+            image: $1.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
+            ports:
+              - "3000:3000"
+
+          mongodb:
+            image: mongo:5.0
+            environment:
+              MONGODB_INITDB_ROOT_USERNAME: admin
+              MONGODB_INITDB_ROOT_PASSWORD: password
+            volumes:
+              - mongo_data:/data/db
+
+        volumes:
+          mongo_data:
+        COMPOSE_EOF
+        
+        # Start app
+        sudo docker-compose pull
+        sudo docker-compose up -d
+        
+        echo " App deployed!"
+        EOF
+        
+        # Run on EC2
+        scp -i ~/.ssh/key -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_IP:~/
+        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ubuntu@$EC2_IP "chmod +x deploy.sh && ./deploy.sh $MY_ACCOUNT"
+
+    - name: Show URLs
+      run: |
+        echo " Deployment Complete!"
+        echo "Frontend: http://$EC2_IP:3000"
+        echo "Backend: http://$EC2_IP:5000"    
