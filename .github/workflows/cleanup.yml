@@ -1,9 +1,8 @@
 name: Cleanup - Destroy AWS Resources
 
 on:
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:  
   
-
 env:
   AWS_REGION: us-east-1
 
