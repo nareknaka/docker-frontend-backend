@@ -1,20 +1,18 @@
-name: CI Build and push Image 
+name: CI Build and push Image
 
 on:
-    push:
-        branches: [feature/ec2-infra-deploy, main]
-    pull_request:
-        branches: [main]
+  push:
+    branches: [main, feature/ec2-infra-deploy]
 
 env:
-    AWS_REGION: us-east-1        
+  AWS_REGION: us-east-1
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Get code
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Setup AWS
@@ -23,35 +21,72 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
-       
-    - name: get  my AWS account number 
+
+    - name: Get AWS Account ID
       run: |
         MY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-        echo "My account is: $MY_ACCOUNT"
         echo "MY_ACCOUNT=$MY_ACCOUNT" >> $GITHUB_ENV
-    
-    - name: create image storage 
-      run: |
-        echo "creating ECR repositories ... "
-        aws ecr create-repository --repository-name my-frontend 2>/dev/null && echo "frontend repo created" || echo "frontend repo exist"
-        aws ecr create-repository --repository-name my-backend 2>/dev/null && echo "backend repo created"|| echo "backend repo exist"
 
-    - name: login to ECR
+    - name: Create ECR repositories
       run: |
-        echo "Logging into ECR ..."
-        aws ecr get-login-password | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com 
-        echo "ECR Login successful"     
+        aws ecr create-repository --repository-name my-frontend || true
+        aws ecr create-repository --repository-name my-backend || true
 
-    - name: Build and push frontend image
+    - name: Login to ECR
       run: |
-        echo "Building frontend Docker image..."
-        docker build -t $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest ./frontend
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
+
+    - name: Build Docker Images
+      run: |
+        echo "Building frontend image..."
+        docker build -t my-frontend:latest ./frontend
+        
+        echo "Building backend image..."
+        docker build -t my-backend:latest ./backend
+
+    - name: Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+
+    - name: Scan Docker Images with Trivy
+      run: |
+        echo "Scanning frontend image..."
+        trivy image --exit-code 0 --format table my-frontend:latest
+        
+        echo "Scanning backend image..."  
+        trivy image --exit-code 0 --format table my-backend:latest
+        
+        echo "Generating detailed reports..."
+        trivy image --format json --output frontend-scan.json my-frontend:latest
+        trivy image --format json --output backend-scan.json my-backend:latest
+      continue-on-error: true
+
+    - name: Upload Trivy Scan Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: trivy-scan-results
+        path: |
+          frontend-scan.json
+          backend-scan.json
+
+    - name: Tag and Push Images to ECR
+      run: |
+        echo "Tagging and pushing frontend..."
+        docker tag my-frontend:latest $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
         docker push $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
-        echo " Frontend image pushed to ECR"
-
-    - name: Build and push backend image
-      run: |
-        echo "Building backend Docker image..."
-        docker build -t $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest ./backend
+        
+        echo "Tagging and pushing backend..."
+        docker tag my-backend:latest $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
         docker push $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
-        echo " Backend image pushed to ECR"
+
+    - name: Build Summary
+      run: |
+        echo "Build and Push Complete!"
+        echo "Frontend image: $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest"
+        echo "Backend image: $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest"
+        echo "Security scans completed with Trivy"

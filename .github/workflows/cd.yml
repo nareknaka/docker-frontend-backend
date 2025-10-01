@@ -14,7 +14,7 @@ jobs:
     - name: Wait for CI to complete
       run: |
         echo "Waiting for CI to complete..."
-        sleep 120  # Wait 2 minutes for CI
+        sleep 120
 
   deploy:
     runs-on: ubuntu-latest
@@ -33,6 +33,12 @@ jobs:
 
     - name: Setup Terraform 
       uses: hashicorp/setup-terraform@v3
+
+    - name: Install Ansible
+      run: |
+        sudo apt update
+        sudo apt install -y ansible
+        ansible --version
     
     - name: Get AWS Account ID 
       run: |
@@ -46,16 +52,13 @@ jobs:
         terraform plan -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
         terraform apply -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
         
-        # Get EC2 instance IP and wait for it to be ready
         EC2_IP=$(terraform output -raw instance_public_ip)
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
         echo "EC2 Instance IP: $EC2_IP"
         
-        # Wait for EC2 to fully initialize
         echo "Waiting for EC2 instance to be ready..."
         sleep 180
         
-        # Check if EC2 is responding to SSH
         echo "Testing SSH connectivity..."
         timeout 60 bash -c "until nc -z $EC2_IP 22; do sleep 5; done"
         echo "Port 22 is now open"
@@ -63,99 +66,98 @@ jobs:
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
-        
-        # Create SSH key file with proper format
         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/key
         chmod 600 ~/.ssh/key
         
-        # Debug SSH key format
-        echo "Checking SSH key format..."
-        echo "First line:"
-        head -1 ~/.ssh/key
-        echo "Last line:"
-        tail -1 ~/.ssh/key
-        echo "Line count:"
-        wc -l ~/.ssh/key
-        echo "File size:"
-        ls -la ~/.ssh/key
-        
-        # Validate SSH key
-        if ssh-keygen -l -f ~/.ssh/key; then
-          echo "SSH key is valid"
-        else
-          echo "SSH key is INVALID - this is the problem!"
-          echo "Full key content (first 100 chars):"
-          head -c 100 ~/.ssh/key
-          exit 1
-        fi
-        
-        # Add SSH config
         cat > ~/.ssh/config << EOF
         Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
             ConnectTimeout 30
-            IdentitiesOnly yes
+        EOF
+        chmod 600 ~/.ssh/config
+
+    - name: Configure EC2 with Ansible
+      run: |
+        # Create Ansible inventory
+        cat > inventory.ini << EOF
+        [webservers]
+        $EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/key
         EOF
         
-        chmod 600 ~/.ssh/config
+        # Create Ansible playbook
+        cat > configure-ec2.yml << 'EOF'
+        ---
+        - hosts: webservers
+          become: yes
+          tasks:
+            - name: Update apt cache
+              apt:
+                update_cache: yes
+                
+            - name: Install required packages
+              apt:
+                name:
+                  - docker.io
+                  - docker-compose
+                  - awscli
+                  - curl
+                  - wget
+                state: present
+                
+            - name: Start and enable Docker
+              service:
+                name: docker
+                state: started
+                enabled: yes
+                
+            - name: Add ubuntu user to docker group
+              user:
+                name: ubuntu
+                groups: docker
+                append: yes
+                
+            - name: Create app directory
+              file:
+                path: /home/ubuntu/app
+                state: directory
+                owner: ubuntu
+                group: ubuntu
+                mode: '0755'
+                
+            - name: Configure AWS CLI region
+              lineinfile:
+                path: /home/ubuntu/.aws/config
+                line: 'region = us-east-1'
+                create: yes
+                owner: ubuntu
+                group: ubuntu
+        EOF
         
-        # Test SSH connectivity with more verbose output
-        echo "Testing SSH connection with verbose output..."
-        ssh -i ~/.ssh/key -v ubuntu@$EC2_IP "echo 'SSH test successful'" || {
-          echo "SSH connection failed!"
-          echo "Trying alternative SSH options..."
-          ssh -i ~/.ssh/key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -o PubkeyAuthentication=yes ubuntu@$EC2_IP "echo 'SSH test successful'"
-        }
- 
+        # Run Ansible playbook
+        echo "Configuring EC2 instance with Ansible..."
+        ansible-playbook -i inventory.ini configure-ec2.yml
+
     - name: Deploy App to EC2
       run: |
-        # Create deploy script
-        cat > deploy.sh << 'EOF'
-        #!/bin/bash
-        set -e
-        
-        echo "Starting deployment script..."
-        
-        # Install Docker if needed
-        if ! command -v docker &> /dev/null; then
-          echo "Installing Docker..."
-          sudo apt update
-          sudo apt install -y docker.io docker-compose awscli
-          sudo systemctl start docker
-          sudo usermod -aG docker ubuntu
-          echo "Docker installed successfully"
-        else
-          echo "Docker already installed"
-        fi
-
-        # Login to ECR
-        echo "Logging into ECR..."
-        aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin $1.dkr.ecr.us-east-1.amazonaws.com
-        
-        # Stop old containers
-        echo "Stopping old containers..."
-        sudo docker-compose down 2>/dev/null || true
-        
-        # Create docker-compose
-        echo "Creating docker-compose.yml..."
-        cat > docker-compose.yml << COMPOSE_EOF
+        # Create docker-compose file
+        cat > docker-compose.yml << EOF
         version: '3.8'
         services:
           backend:
-            image: $1.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
+            image: $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-backend:latest
             ports:
               - "5000:5000"
             environment:
               - MONGODB_URI=mongodb://mongodb:27017/todoapp
             depends_on:
               - mongodb
- 
+
           frontend:
-            image: $1.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
+            image: $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
             ports:
               - "3000:3000"
- 
+
           mongodb:
             image: mongo:5.0
             environment:
@@ -163,28 +165,32 @@ jobs:
               MONGODB_INITDB_ROOT_PASSWORD: password
             volumes:
               - mongo_data:/data/db
- 
+
         volumes:
           mongo_data:
-        COMPOSE_EOF
+        EOF
         
-        # Start app
-        echo "Starting application..."
+        # Copy docker-compose to EC2
+        scp -i ~/.ssh/key -o StrictHostKeyChecking=no docker-compose.yml ubuntu@$EC2_IP:~/app/
+        
+        # Deploy using docker-compose
+        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'DEPLOY_EOF'
+        cd ~/app
+        
+        # Login to ECR
+        aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin $MY_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
+        
+        # Deploy application
+        sudo docker-compose down || true
         sudo docker-compose pull
         sudo docker-compose up -d
         
-        echo "App deployed successfully!"
-        EOF
-        
-        # Copy and execute script
-        echo "Copying deployment script to EC2..."
-        scp -i ~/.ssh/key -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_IP:~/
-        
-        echo "Executing deployment script on EC2..."
-        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ubuntu@$EC2_IP "chmod +x deploy.sh && ./deploy.sh $MY_ACCOUNT"
+        echo "Application deployed successfully!"
+        DEPLOY_EOF
 
     - name: Show URLs
       run: |
         echo "Deployment Complete!"
         echo "Frontend: http://$EC2_IP:3000"
         echo "Backend: http://$EC2_IP:5000"
+        echo "MongoDB: Internal access only"
