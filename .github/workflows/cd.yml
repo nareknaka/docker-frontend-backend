@@ -43,14 +43,58 @@ jobs:
       run: |
         cd infrastructure
         terraform init
-        # Import existing state or destroy if needed
         terraform destroy -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}" || true
       continue-on-error: true
 
+    - name: Deploy infrastructure with Terraform
+      run: |
+        cd infrastructure
+        terraform init
+        terraform plan -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
+        terraform apply -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
+        
+        # Get EC2 instance IP and wait for it to be ready
+        EC2_IP=$(terraform output -raw instance_public_ip)
+        echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+        echo "EC2 Instance IP: $EC2_IP"
+        
+        # Wait for EC2 to fully initialize
+        echo "Waiting for EC2 instance to be ready..."
+        sleep 180
+        
+        # Check if EC2 is responding to SSH
+        echo "Testing SSH connectivity..."
+        timeout 60 bash -c "until nc -z $EC2_IP 22; do sleep 5; done"
+        echo "Port 22 is now open"
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        
+        # Fix SSH key format
+        cat > ~/.ssh/key << 'EOF'
+        ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        EOF
+        
+        chmod 600 ~/.ssh/key
+        
+        # Add SSH config
+        cat > ~/.ssh/config << 'SSH_CONFIG'
+        Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+        SSH_CONFIG 
+        
+
+        
+        # Test SSH connectivity
+        echo "Testing SSH connection..."
+        ssh -i ~/.ssh/key ubuntu@$EC2_IP "echo 'SSH test successful'"
 
     - name: Deploy App to EC2
       run: |
-        # Create deploy script with better error handling
+        # Create deploy script
         cat > deploy.sh << 'EOF'
         #!/bin/bash
         set -e
@@ -68,9 +112,8 @@ jobs:
         else
           echo "Docker already installed"
         fi
-        
-        # Configure AWS credentials for ECR login
-        aws configure set default.region us-east-1
+
+
         
         # Login to ECR
         echo "Logging into ECR..."
@@ -93,13 +136,13 @@ jobs:
               - MONGODB_URI=mongodb://mongodb:27017/todoapp
             depends_on:
               - mongodb
-            restart: unless-stopped
+
 
           frontend:
             image: $1.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
             ports:
               - "3000:3000"
-            restart: unless-stopped
+
 
           mongodb:
             image: mongo:5.0
@@ -108,7 +151,7 @@ jobs:
               MONGODB_INITDB_ROOT_PASSWORD: password
             volumes:
               - mongo_data:/data/db
-            restart: unless-stopped
+
 
         volumes:
           mongo_data:
@@ -119,16 +162,10 @@ jobs:
         sudo docker-compose pull
         sudo docker-compose up -d
         
-        # Verify deployment
-        echo "Verifying deployment..."
-        sudo docker-compose ps
-        
-        echo " App deployed successfully!"
-        echo "Frontend: http://\$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):3000"
-        echo "Backend: http://\$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):5000"
+        echo "App deployed successfully!"
         EOF
         
-        # Copy and run script with retry logic
+        # Copy and execute script
         echo "Copying deployment script to EC2..."
         scp -i ~/.ssh/key deploy.sh ubuntu@$EC2_IP:~/
         
@@ -137,6 +174,6 @@ jobs:
 
     - name: Show URLs
       run: |
-        echo " Deployment Complete!"
+        echo "🎉 Deployment Complete!"
         echo "Frontend: http://$EC2_IP:3000"
         echo "Backend: http://$EC2_IP:5000"
