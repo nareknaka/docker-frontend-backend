@@ -48,62 +48,6 @@ jobs:
       continue-on-error: true
 
 
-    - name: Deploy infrastructure with Terraform
-      run: |
-        cd infrastructure
-        terraform init
-        terraform plan -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
-        terraform apply -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
-        
-        # Get EC2 instance IP and wait for it to be ready
-        EC2_IP=$(terraform output -raw instance_public_ip)
-        echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
-        echo "EC2 Instance IP: $EC2_IP"
-        
-        # Wait longer for EC2 to fully initialize
-        echo "Waiting for EC2 instance to be ready..."
-        sleep 180  # Increase from 60 to 180 seconds
-        
-        # Check if EC2 is responding to SSH
-        echo "Testing SSH connectivity..."
-        timeout 60 bash -c "until nc -z $EC2_IP 22; do sleep 5; done"
-        echo "Port 22 is now open"
-    
-    - name: Setup SSH
-      run: |
-        mkdir -p ~/.ssh
-        # Add proper SSH key formatting
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/key
-        chmod 600 ~/.ssh/key
-        
-        # Verify key format
-        ssh-keygen -l -f ~/.ssh/key || echo "SSH key format issue detected"
-        
-        # Wait longer for EC2 to be fully ready
-        echo "Waiting for EC2 SSH to be ready..."
-        sleep 120
-        
-        # Add SSH config for better connection handling
-        cat > ~/.ssh/config << 'SSH_CONFIG'
-        Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            ConnectTimeout 30
-            ServerAliveInterval 60
-        SSH_CONFIG
-        
-        # Test SSH connectivity first
-        for i in {1..5}; do
-          if ssh -i ~/.ssh/key -o ConnectTimeout=10 ubuntu@$EC2_IP "echo 'SSH test successful'"; then
-            echo "SSH connection established"
-            break
-          else
-            echo "SSH attempt $i failed, retrying in 30 seconds..."
-            sleep 30
-          fi
-        done
-
-
     - name: Deploy App to EC2
       run: |
         # Create deploy script with better error handling
@@ -190,3 +134,9 @@ jobs:
         
         echo "Executing deployment script on EC2..."
         ssh -i ~/.ssh/key ubuntu@$EC2_IP "chmod +x deploy.sh && ./deploy.sh $MY_ACCOUNT"
+
+    - name: Show URLs
+      run: |
+        echo " Deployment Complete!"
+        echo "Frontend: http://$EC2_IP:3000"
+        echo "Backend: http://$EC2_IP:5000"
