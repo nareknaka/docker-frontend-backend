@@ -1,16 +1,15 @@
 variable "region" {
   description = "AWS region"
+  type        = string
   default     = "us-east-1"
 }
 
+variable "account_id" {
+  description = "AWS Account ID"
+  type        = string
+}
+
 variable "AWS_KEY_PAIR_NAME" {
-  description = "SSH key pair name for EC2 access"
-}
-
-variable "AWS_ACCESS_KEY_ID" {
-  description = "AWS Access Key ID from GitHub secret"
-}
-
-variable "AWS_SECRET_ACCESS_KEY" {
-  description = "AWS Secret Access Key from GitHub secret"
+  description = "AWS key pair name"
+  type        = string
 }
