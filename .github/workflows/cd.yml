@@ -38,14 +38,7 @@ jobs:
       run: |
         MY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
         echo "MY_ACCOUNT=$MY_ACCOUNT" >> $GITHUB_ENV
-    
-    - name: Clean up existing resources (if needed)
-      run: |
-        cd infrastructure
-        terraform init
-        terraform destroy -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}" || true
-      continue-on-error: true
-
+     
     - name: Deploy infrastructure with Terraform
       run: |
         cd infrastructure
