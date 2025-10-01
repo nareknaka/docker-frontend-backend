@@ -2,7 +2,6 @@ name: CD - Deploy to EC2
 
 on:
   workflow_run:
-    workflows: ["CI Build and push image"]
+    workflows: ["CI Build and push Image"]  
     types: [completed]
-    branches: [feauture/ec2-infra-deploy]
-    
+    branches: [feature/ec2-infra-deploy, main]
