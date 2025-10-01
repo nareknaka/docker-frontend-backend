@@ -4,7 +4,18 @@ provider "aws" {
   secret_key = var.AWS_SECRET_ACCESS_KEY
 }
 
+# Check if security group already exists
+data "aws_security_groups" "existing_webapp_sg" {
+  filter {
+    name   = "group-name"
+    values = ["webapp-security-group"]
+  }
+}
+
 resource "aws_security_group" "webapp_sg" {
+  # Only create if doesn't exist
+  count = length(data.aws_security_groups.existing_webapp_sg.ids) == 0 ? 1 : 0
+  
   name        = "webapp-security-group"
   description = "Security group for webapp allowing web traffic"
   
@@ -45,11 +56,16 @@ resource "aws_security_group" "webapp_sg" {
   }
 }
 
+# Get the correct security group ID (existing or newly created)
+locals {
+  security_group_id = length(aws_security_group.webapp_sg) > 0 ? aws_security_group.webapp_sg[0].id : data.aws_security_groups.existing_webapp_sg.ids[0]
+}
+
 resource "aws_instance" "webapp" {
   ami                         = "ami-0c02fb55956c7d316"
   instance_type               = "t2.micro"
   key_name                    = var.AWS_KEY_PAIR_NAME
-  vpc_security_group_ids      = [aws_security_group.webapp_sg.id]
+  vpc_security_group_ids      = [local.security_group_id]
   subnet_id                   = "subnet-0beba1805554e5c57"
 
   # Add Docker installation
