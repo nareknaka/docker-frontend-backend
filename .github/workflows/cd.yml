@@ -67,13 +67,18 @@ jobs:
         timeout 60 bash -c "until nc -z $EC2_IP 22; do sleep 5; done"
         echo "Port 22 is now open"
 
-    - name: Setup SSH
+        - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
         
-        # Fix SSH key format
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/key
+        # Create SSH key file with proper format
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/key
         chmod 600 ~/.ssh/key
+        
+        # Verify key format
+        echo "Checking SSH key format..."
+        head -1 ~/.ssh/key
+        tail -1 ~/.ssh/key
         
         # Add SSH config
         cat > ~/.ssh/config << EOF
@@ -81,14 +86,27 @@ jobs:
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
             ConnectTimeout 30
+            IdentitiesOnly yes
         EOF
         
         chmod 600 ~/.ssh/config
         
-        # Test SSH connectivity
+        # Test SSH connectivity with retries
         echo "Testing SSH connection..."
-        ssh -i ~/.ssh/key ubuntu@$EC2_IP "echo 'SSH test successful'"
-
+        for i in {1..3}; do
+          if ssh -i ~/.ssh/key ubuntu@$EC2_IP "echo 'SSH test successful'"; then
+            echo "SSH connection established"
+            break
+          else
+            echo "SSH attempt $i failed, retrying in 30 seconds..."
+            if [ $i -eq 3 ]; then
+              echo "All SSH attempts failed!"
+              exit 1
+            fi
+            sleep 30
+          fi
+        done
+ 
     - name: Deploy App to EC2
       run: |
         # Create deploy script
@@ -166,6 +184,6 @@ jobs:
 
     - name: Show URLs
       run: |
-        echo " Deployment Complete!"
+        echo "Deployment Complete!"
         echo "Frontend: http://$EC2_IP:3000"
         echo "Backend: http://$EC2_IP:5000"
