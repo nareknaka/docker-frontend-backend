@@ -1,7 +1,9 @@
 name: Cleanup - Destroy AWS Resources
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [feature/ec2-infra-deploy]  
 
 env:
   AWS_REGION: us-east-1
