@@ -72,21 +72,18 @@ jobs:
         mkdir -p ~/.ssh
         
         # Fix SSH key format
-        cat > ~/.ssh/key << 'EOF'
-        ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        EOF
-        
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/key
         chmod 600 ~/.ssh/key
         
         # Add SSH config
-        cat > ~/.ssh/config << 'SSH_CONFIG'
+        cat > ~/.ssh/config << EOF
         Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
             ConnectTimeout 30
-        SSH_CONFIG 
+        EOF
         
-
+        chmod 600 ~/.ssh/config
         
         # Test SSH connectivity
         echo "Testing SSH connection..."
@@ -113,8 +110,6 @@ jobs:
           echo "Docker already installed"
         fi
 
-
-        
         # Login to ECR
         echo "Logging into ECR..."
         aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin $1.dkr.ecr.us-east-1.amazonaws.com
@@ -136,14 +131,12 @@ jobs:
               - MONGODB_URI=mongodb://mongodb:27017/todoapp
             depends_on:
               - mongodb
-
-
+ 
           frontend:
             image: $1.dkr.ecr.us-east-1.amazonaws.com/my-frontend:latest
             ports:
               - "3000:3000"
-
-
+ 
           mongodb:
             image: mongo:5.0
             environment:
@@ -151,8 +144,7 @@ jobs:
               MONGODB_INITDB_ROOT_PASSWORD: password
             volumes:
               - mongo_data:/data/db
-
-
+ 
         volumes:
           mongo_data:
         COMPOSE_EOF
@@ -167,13 +159,13 @@ jobs:
         
         # Copy and execute script
         echo "Copying deployment script to EC2..."
-        scp -i ~/.ssh/key deploy.sh ubuntu@$EC2_IP:~/
+        scp -i ~/.ssh/key -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_IP:~/
         
         echo "Executing deployment script on EC2..."
-        ssh -i ~/.ssh/key ubuntu@$EC2_IP "chmod +x deploy.sh && ./deploy.sh $MY_ACCOUNT"
+        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ubuntu@$EC2_IP "chmod +x deploy.sh && ./deploy.sh $MY_ACCOUNT"
 
     - name: Show URLs
       run: |
-        echo "🎉 Deployment Complete!"
+        echo " Deployment Complete!"
         echo "Frontend: http://$EC2_IP:3000"
         echo "Backend: http://$EC2_IP:5000"
