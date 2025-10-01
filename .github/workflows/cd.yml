@@ -1,19 +1,25 @@
 name: CD - Deploy to EC2
 
 on:
-  workflow_run:
-    workflows: ["CI Build and push Image"]  
-    types: [completed]
-    
+  push:
+    branches: [main, feature/ec2-infra-deploy]
 
 env:
   AWS_REGION: us-east-1 
 
 jobs:
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Wait for CI to complete
+      run: |
+        echo "Waiting for CI to complete..."
+        sleep 120  # Wait 2 minutes for CI
+
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}   
-
+    needs: wait-for-ci
+    
     steps:
     - name: Checkout
       uses: actions/checkout@v4
