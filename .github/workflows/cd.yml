@@ -67,7 +67,7 @@ jobs:
         timeout 60 bash -c "until nc -z $EC2_IP 22; do sleep 5; done"
         echo "Port 22 is now open"
 
-        - name: Setup SSH
+    - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
         
