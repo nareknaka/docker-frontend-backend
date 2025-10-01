@@ -38,14 +38,14 @@ jobs:
       run: |
         cd infrastructure
         terraform init
-        terraform plan -var="account_id=$MY_ACCOUNT"
-        terraform apply -auto-approve -var="account_id=$MY_ACCOUNT"
+        terraform plan -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
+        terraform apply -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}"
         
         # Get EC2 instance IP and wait for it to be ready
         EC2_IP=$(terraform output -raw instance_public_ip)
         echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
         echo "Waiting for EC2 instance to be ready..."
-        sleep 60 
+        sleep 60
     
     - name: Setup SSH
       run: |
