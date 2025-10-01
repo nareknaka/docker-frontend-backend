@@ -1,0 +1,83 @@
+name: Cleanup - Destroy AWS Resources
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+    
+    - name: Get AWS Account ID
+      run: |
+        MY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+        echo "MY_ACCOUNT=$MY_ACCOUNT" >> $GITHUB_ENV
+        echo "Starting cleanup for account: $MY_ACCOUNT"
+
+    - name: Destroy Terraform Infrastructure
+      run: |
+        cd infrastructure
+        terraform init
+        echo "Destroying all Terraform-managed resources..."
+        echo "This will delete: EC2 instances, Security Groups"
+        terraform destroy -auto-approve -var="account_id=$MY_ACCOUNT" -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" -var="AWS_KEY_PAIR_NAME=${{ secrets.AWS_KEY_PAIR_NAME }}" || true
+      continue-on-error: true
+
+    - name: Clean up ECR Repositories
+      run: |
+        echo "Cleaning up ECR repositories..."
+        echo "Note: CI pipeline will recreate these when needed"
+        
+        # Delete all images in my-frontend repository
+        aws ecr describe-images --repository-name my-frontend --query 'imageDetails[*].imageDigest' --output text | \
+        xargs -I {} aws ecr batch-delete-image --repository-name my-frontend --image-ids imageDigest={} || true
+        
+        # Delete all images in my-backend repository  
+        aws ecr describe-images --repository-name my-backend --query 'imageDetails[*].imageDigest' --output text | \
+        xargs -I {} aws ecr batch-delete-image --repository-name my-backend --image-ids imageDigest={} || true
+        
+        # Delete ECR repositories
+        aws ecr delete-repository --repository-name my-frontend --force || true
+        aws ecr delete-repository --repository-name my-backend --force || true
+        
+        echo "ECR repositories cleaned up"
+      continue-on-error: true
+
+    - name: List Remaining Resources
+      run: |
+        echo "Checking for any remaining resources..."
+        
+        echo "EC2 Instances:"
+        aws ec2 describe-instances --filters "Name=instance-state-name,Values=running,pending,stopping,stopped" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,Tags[?Key==`Name`].Value|[0]]' --output table || true
+        
+        echo "ECR Repositories:"
+        aws ecr describe-repositories --query 'repositories[*].[repositoryName,repositoryUri]' --output table || true
+        
+        echo "Key Pairs (preserved):"
+        aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output table || true
+
+    - name: Cleanup Summary
+      run: |
+        echo "Cleanup completed!"
+        echo "Terraform infrastructure destroyed (EC2, Security Groups)"
+        echo "ECR repositories cleaned"
+        echo "Key pairs preserved (not deleted)"
+        echo ""
+        echo "Your AWS bill should now be minimal!"
+        echo "Next CI/CD run will recreate everything automatically"
