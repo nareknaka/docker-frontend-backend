@@ -85,7 +85,7 @@ locals {
 }
 
 resource "aws_instance" "webapp" {
-  ami                         = "ami-0e86e20dae90224ad"  # Ubuntu 22.04 LTS
+  ami                         = "ami-0c02fb55956c7d316"  # Amazon Linux 2 AMI (HVM)
   instance_type               = "t2.micro"
   key_name                    = var.AWS_KEY_PAIR_NAME
   vpc_security_group_ids      = [local.security_group_id]

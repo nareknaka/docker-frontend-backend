@@ -59,7 +59,7 @@ jobs:
         # Create Ansible inventory
         cat > inventory.ini << EOF
         [webservers]
-        $EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/key ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+        $EC2_IP ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/key ansible_ssh_common_args='-o StrictHostKeyChecking=no'
         EOF
         
         # Create Ansible config
@@ -69,7 +69,7 @@ jobs:
         timeout = 30
         EOF
         
-        # Create simple Ansible playbook (Docker already installed via user_data)
+        # Create simple Ansible playbook 
         cat > configure-ec2.yml << 'EOF'
         ---
         - hosts: webservers
@@ -87,27 +87,27 @@ jobs:
                 
             - name: Ensure app directory exists
               file:
-                path: /home/ubuntu/app
+                path: /home/ec2-user/app
                 state: directory
-                owner: ubuntu
-                group: ubuntu
+                owner: ec2-user
+                group: ec2-user
                 mode: '0755'
                 
             - name: Create AWS config directory
               file:
-                path: /home/ubuntu/.aws
+                path: /home/ec2-user/.aws
                 state: directory
-                owner: ubuntu
-                group: ubuntu
+                owner: ec2-user
+                group: ec2-user
                 
             - name: Configure AWS CLI region
               copy:
                 content: |
                   [default]
                   region = us-east-1
-                dest: /home/ubuntu/.aws/config
-                owner: ubuntu
-                group: ubuntu
+                dest: /home/ec2-user/.aws/config
+                owner: ec2-user
+                group: ec2-user
         EOF
         
         # Run Ansible playbook
@@ -147,9 +147,9 @@ jobs:
         EOF
         
         # Deploy to EC2
-        scp -i ~/.ssh/key -o StrictHostKeyChecking=no docker-compose.yml ubuntu@$EC2_IP:~/app/
+        scp -i ~/.ssh/key -o StrictHostKeyChecking=no docker-compose.yml ec2-user@$EC2_IP:~/app/
         
-        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
+        ssh -i ~/.ssh/key -o StrictHostKeyChecking=no ec2-user@$EC2_IP << 'EOF'
         cd ~/app
         
         # Login to ECR (may fail without IAM role, but continue)
