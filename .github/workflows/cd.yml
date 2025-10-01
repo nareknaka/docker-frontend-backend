@@ -13,10 +13,10 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-   
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}   
 
     steps:
-    - name: Chechout
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Setup AWS
