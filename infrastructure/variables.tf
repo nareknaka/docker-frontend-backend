@@ -3,14 +3,17 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "KEY_NAME" {
-  description = "SSH key name"
+variable "key_name" {
+  description = "Name of the AWS EC2 key pair"
+  default     = "devops-key"
 }
 
-variable "AWS_ACCESS_KEY_ID" {
-  description = "AWS Access Key ID from GitHub secret"
+variable "private_key_path" {
+  description = "Path to your private key file"
+  default     = "devops-key.pem"
 }
 
-variable "AWS_SECRET_ACCESS_KEY" {
-  description = "AWS Secret Access Key from GitHub secret"
+variable "private_key_content" {
+  description = "SSH private key content"
+  type        = string
 }

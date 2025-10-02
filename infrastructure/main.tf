@@ -1,18 +1,26 @@
 provider "aws" {
-  region     = var.region
-  access_key = var.AWS_ACCESS_KEY_ID
-  secret_key = var.AWS_SECRET_ACCESS_KEY
+  region = var.region
 }
 
-
 resource "aws_instance" "webapp" {
-  ami                         = "ami-0c02fb55956c7d316"
+  ami                         = "ami-0c02fb55956c7d316" # Ubuntu 22.04 us-east-1
   instance_type               = "t2.micro"
-  key_name                    = "devops-key"
-  vpc_security_group_ids      = ["sg-005cad66d86508e0a"]
-  subnet_id                   = "subnet-0beba1805554e5c57"
+  key_name                    = var.key_name
+  associate_public_ip_address = true
+  vpc_security_group_ids      = ["sg-005cad66d8508e0a"]
 
   tags = {
     Name = "WebAppEC2"
+  }
+
+  provisioner "remote-exec" {
+    inline = ["echo Instance provisioned!"]
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = var.private_key_content
+    host        = self.public_ip
   }
 }

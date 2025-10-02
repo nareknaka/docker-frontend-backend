@@ -1,0 +1,137 @@
+name: Build & Deploy to EC2 with Docker & Ansible
+
+on:
+  push:
+    branches:
+      - main
+      - ngrigoryan/learning
+
+env:
+  AWS_REGION: us-east-1
+  ECR_FRONTEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/frontend
+  ECR_BACKEND: 446556758489.dkr.ecr.us-east-1.amazonaws.com/backend
+  TF_VAR_private_key_content: ${{ secrets.EC2_SSH_KEY }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_FRONTEND
+
+      - name: Build frontend Docker image
+        run: docker build -t $ECR_FRONTEND ./frontend
+
+      - name: Build backend Docker image
+        run: docker build -t $ECR_BACKEND ./backend
+
+      - name: Trivy scan - Frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_FRONTEND }}
+          format: 'table'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Trivy scan - Backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_BACKEND }}
+          format: 'table'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Tag & push frontend
+        run: |
+          docker tag $ECR_FRONTEND $ECR_FRONTEND:latest
+          docker push $ECR_FRONTEND:latest
+
+      - name: Tag & push backend
+        run: |
+          docker tag $ECR_BACKEND $ECR_BACKEND:latest
+          docker push $ECR_BACKEND:latest
+
+  provision-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_ip: ${{ steps.output_ip.outputs.ec2_ip }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        working-directory: infrastructure
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: infrastructure
+        run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: infrastructure
+        run: terraform apply -auto-approve
+
+      - name: Output EC2 IP
+        id: output_ip
+        working-directory: infrastructure
+        shell: bash
+        run: |
+          IP=$(terraform output -raw ec2_ip 2>/dev/null)
+          echo "ec2_ip=$IP" >> "$GITHUB_OUTPUT"
+
+  configure-server:
+    needs: provision-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create ansible private key
+        run: |
+          mkdir -p ansible
+          echo "${{ secrets.EC2_SSH_KEY }}" > ansible/ec2-pair.pem
+          chmod 600 ansible/ec2-pair.pem
+
+      - name: Run Ansible playbook
+        env:
+          EC2_IP: ${{ needs.provision-infrastructure.outputs.ec2_ip }}
+        run: |
+          echo "[web]" > ansible/inventory.ini
+          echo "$EC2_IP ansible_user=ubuntu ansible_ssh_private_key_file=ansible/ec2-pair.pem" >> ansible/inventory.ini
+          ansible-playbook -i ansible/inventory.ini infrastructure/setup-docker.yml
+
+      - name: Deploy to EC2 via SSH and Docker Compose
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd docker-frontend-backend
+            git pull origin main
+            docker-compose pull
+            docker-compose down
+            docker-compose up -d

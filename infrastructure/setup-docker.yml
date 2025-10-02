@@ -2,6 +2,7 @@
 - name: Setup Docker and Docker Compose on EC2
   hosts: web
   become: yes
+
   tasks:
     - name: Install required packages
       apt:
@@ -37,8 +38,8 @@
           -o /usr/local/bin/docker-compose
         chmod +x /usr/local/bin/docker-compose
 
-    - name: Check Docker version
+    - name: Verify Docker version
       command: docker --version
 
-    - name: Check Docker Compose version
+    - name: Verify Docker Compose version
       command: docker-compose --version

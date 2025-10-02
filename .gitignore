@@ -6,8 +6,15 @@ npm-debug.log
 *.sublime-project
 *.sublime-workspace
 .vs
+
+# Terraform files
 .terraform/
 *.pem
+*.tfstate
+*.tfstate.*
+*.lock.hcl
+
+# SSH keys and infrastructure secrets
 *.pubinfrastructure/devops-key
 *.pubinfrastructure/devops_key_rotatedinfrastructure/devops-key
 infrastructure/devops-key
@@ -17,4 +24,3 @@ infrastructure/devops-key-rotated.pub
 infrastructure/*.pem
 infrastructure/devops-key
 infrastructure/devops-key.pub
-
