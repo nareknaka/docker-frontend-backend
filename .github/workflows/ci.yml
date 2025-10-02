@@ -2,7 +2,9 @@ name: CI Build and push Image
 
 on:
   push:
-    branches: [main, feature/ec2-infra-deploy]
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 env:
   AWS_REGION: us-east-1
